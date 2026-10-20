@@ -13,29 +13,32 @@
       <span class="brand-mark" aria-hidden="true">DB</span>
       <span><strong>DBMS Quiz</strong><small>Course 313302 · Semester 3</small></span>
     </a>
-    <span class="header-label">Browser-based assessment</span>
+    <div class="header-tools">
+      <span class="header-label">SQL query assessment</span>
+      <span id="attempt-indicator" class="header-attempt" hidden></span>
+    </div>
   </header>
 
   <main id="app" class="main-content">
     <section id="welcome-screen" class="card welcome-card">
       <div class="eyebrow">DATABASE MANAGEMENT SYSTEM</div>
       <h1>Test your understanding.</h1>
-      <p class="intro">A timed assessment based on the MSBTE K Scheme syllabus. Each attempt draws a fresh, balanced set from the question bank.</p>
+      <p class="intro">Write Oracle SQL queries for a randomly selected set of database table and data operations.</p>
       <div class="exam-facts" aria-label="Exam format">
-        <div><strong>10</strong><span>questions</span></div>
-        <div><strong>5 min</strong><span>time limit</span></div>
-        <div><strong>10</strong><span>marks</span></div>
-        <div><strong>500</strong><span>question bank</span></div>
+        <div><strong>5</strong><span>questions per attempt</span></div>
+        <div><strong>10 min</strong><span>time limit</span></div>
+        <div><strong>5</strong><span>marks</span></div>
+        <div><strong>50</strong><span>questions in bank</span></div>
       </div>
       <form id="candidate-form" novalidate>
-        <label for="enrollment">Enrolment number</label>
-        <input id="enrollment" name="enrollment" autocomplete="off" maxlength="40" required placeholder="Enter your enrolment number">
+        <label for="seat-number">Seat number</label>
+        <input id="seat-number" name="seatNumber" autocomplete="off" maxlength="40" required placeholder="Enter your seat number">
         <label for="candidate-name">Full name</label>
         <input id="candidate-name" name="candidateName" autocomplete="name" maxlength="100" required placeholder="Enter your name">
         <p id="form-error" class="error-message" role="alert" hidden></p>
         <button class="button button-primary button-wide" type="submit">Start exam <span aria-hidden="true">→</span></button>
       </form>
-      <div class="notice"><strong>Important:</strong> Your exam will be submitted immediately if you switch tabs or leave this browser window. Keep this page active until submission.</div>
+      <div class="notice"><strong>Important:</strong> Enter only the SQL query in the answer box. Your exam will be submitted immediately if you switch tabs or leave this browser window.</div>
       <details class="privacy-note">
         <summary>How exam monitoring and results work</summary>
         <p>This browser-only app detects when its tab becomes hidden or its window loses focus. Browser security does not allow it to reliably detect every operating-system screen switch or prevent a determined user from bypassing client-side checks. Attempts and scores are stored in this browser only; export the CSV regularly and keep it on a trusted device.</p>
@@ -45,14 +48,16 @@
     <section id="exam-screen" class="card exam-card" hidden aria-live="polite">
       <div class="exam-topline">
         <div><span class="eyebrow">IN PROGRESS</span><h1 id="exam-heading">Your assessment</h1></div>
-        <div id="timer" class="timer" role="timer" aria-live="off">05:00</div>
+        <div id="timer" class="timer" role="timer" aria-live="off">10:00</div>
       </div>
-      <div class="progress-row"><span id="progress-label">Question 1 of 10</span><span id="answered-label">0 answered</span></div>
+      <div class="progress-row"><span id="progress-label">Question 1 of 5</span><span id="answered-label">0 answered</span></div>
       <div class="progress-track"><span id="progress-bar"></span></div>
       <div id="question-container"></div>
+      <p id="syntax-tip" class="syntax-tip" role="status" hidden></p>
       <div class="exam-controls">
         <button id="previous-button" class="button button-secondary" type="button">Previous</button>
         <button id="next-button" class="button button-secondary" type="button">Next</button>
+        <button id="tip-button" class="button button-secondary" type="button" aria-controls="syntax-tip" aria-expanded="false">SQL tip</button>
         <button id="submit-button" class="button button-primary" type="button">Submit exam</button>
       </div>
     </section>
@@ -61,7 +66,7 @@
       <div class="eyebrow">ATTEMPT RECORDED</div>
       <h1 id="result-heading">Assessment submitted</h1>
       <p id="result-message" class="intro"></p>
-      <div class="score-panel"><span>Your score</span><strong id="score-value">0 / 10</strong><span id="percentage-value">0%</span></div>
+      <div class="score-panel"><span>Your score</span><strong id="score-value">0 / 5</strong><span id="percentage-value">0%</span></div>
       <p id="result-reason" class="result-reason"></p>
       <div class="result-actions">
         <button id="download-results-button" class="button button-primary" type="button">Download results for Excel (.csv)</button>
@@ -70,7 +75,7 @@
         <div class="record-heading"><div><h2>Saved attempts</h2><p>Results saved in this browser</p></div><button id="export-all-button" class="button button-small button-secondary" type="button">Export all</button></div>
         <div class="table-wrap">
           <table>
-            <thead><tr><th>Enrolment number</th><th>Name</th><th>Score</th><th>Submitted</th></tr></thead>
+            <thead><tr><th>Seat number</th><th>Name</th><th>Score</th><th>Submitted</th></tr></thead>
             <tbody id="records-body"></tbody>
           </table>
         </div>
@@ -83,7 +88,7 @@
     </section>
   </main>
   <footer class="site-footer">Based on the DATABASE MANAGEMENT SYSTEM syllabus · MSBTE K Scheme · Course 313302</footer>
-  <script src="questions.js"></script>
+  <script src="sql-questions.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

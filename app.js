@@ -2,8 +2,8 @@
   "use strict";
 
   const STORAGE_KEY = "dbmsQuizAttemptsV1";
-  const EXAM_SECONDS = 5 * 60;
-  const REQUIRED_COUNTS = { Simple: 4, Intermediate: 3, Complex: 3 };
+  const EXAM_SECONDS = 10 * 60;
+  const QUESTIONS_PER_ATTEMPT = 5;
   const screens = {
     welcome: document.getElementById("welcome-screen"),
     exam: document.getElementById("exam-screen"),
@@ -28,6 +28,10 @@
   const questionContainer = document.getElementById("question-container");
   const timer = document.getElementById("timer");
   const storageWarning = document.getElementById("storage-warning");
+  const attemptIndicator = document.getElementById("attempt-indicator");
+  const submitButton = document.getElementById("submit-button");
+  const tipButton = document.getElementById("tip-button");
+  const syntaxTip = document.getElementById("syntax-tip");
 
   function shuffle(items) {
     const shuffled = items.slice();
@@ -40,35 +44,60 @@
 
   function selectQuestions() {
     const bank = window.QUESTION_BANK;
-    if (!Array.isArray(bank) || bank.length !== 500) {
-      throw new Error("The question bank must contain exactly 500 questions.");
+    if (!Array.isArray(bank) || bank.length !== 50) {
+      throw new Error("The question bank must contain exactly 50 questions.");
     }
 
-    const chosen = [];
-    const usedTemplates = new Set();
-    Object.keys(REQUIRED_COUNTS).forEach(function (difficulty) {
-      const candidates = shuffle(bank.filter(function (question) {
-        return question.difficulty === difficulty;
-      }));
-      let needed = REQUIRED_COUNTS[difficulty];
-      for (const candidate of candidates) {
-        if (!usedTemplates.has(candidate.templateId)) {
-          chosen.push(candidate);
-          usedTemplates.add(candidate.templateId);
-          needed -= 1;
-          if (needed === 0) break;
-        }
-      }
-      if (needed !== 0) {
-        throw new Error("Not enough unique " + difficulty.toLowerCase() + " questions in the question bank.");
-      }
-    });
+    return shuffle(bank).slice(0, QUESTIONS_PER_ATTEMPT);
+  }
 
-    return shuffle(chosen).map(function (question) {
-      return Object.assign({}, question, {
-        options: shuffle([question.answer].concat(question.distractors))
-      });
-    });
+  function normalizeSql(query) {
+    const parts = String(query || "")
+      .trim()
+      .replace(/;\s*$/, "")
+      .match(/'(?:''|[^'])*'|"(?:""|[^"])*"|[^'"]+/g) || [];
+    return parts.map(function (part) {
+        if (part.charAt(0) === "'" || part.charAt(0) === '"') return part;
+        return part.toLowerCase().replace(/\s+/g, " ").trim().replace(/\s*([(),=<>*])\s*/g, "$1");
+      })
+      .join("");
+  }
+
+  function getSyntaxTip(question) {
+    switch (question.category) {
+      case "CREATE TABLE":
+        return "Oracle form: CREATE TABLE table_name (column_name datatype, ...); Add required constraints to the relevant column definitions.";
+      case "DROP TABLE":
+        return "Oracle form: DROP TABLE table_name;";
+      case "RENAME TABLE":
+        return "Oracle form: RENAME old_table_name TO new_table_name;";
+      case "ALTER TABLE":
+        if (/modify/i.test(question.question)) {
+          return "Oracle form: ALTER TABLE table_name MODIFY (column_name new_datatype);";
+        }
+        if (/drop/i.test(question.question)) {
+          return "Oracle form: ALTER TABLE table_name DROP COLUMN column_name;";
+        }
+        return "Oracle form: ALTER TABLE table_name ADD (column_name datatype);";
+      case "TRUNCATE TABLE":
+        return "Oracle form: TRUNCATE TABLE table_name;";
+      case "INSERT":
+        return "Oracle form: INSERT INTO table_name (column1, column2) VALUES (value1, value2);";
+      case "UPDATE":
+        return "Oracle form: UPDATE table_name SET column_name = value WHERE condition;";
+      case "DELETE":
+        return "Oracle form: DELETE FROM table_name WHERE condition;";
+      case "SELECT":
+        if (/count/i.test(question.question)) {
+          return "Oracle form: SELECT COUNT(*) AS alias FROM table_name;";
+        }
+        if (/order/i.test(question.question)) {
+          return "Oracle form: SELECT columns FROM table_name ORDER BY column_name ASC;";
+        }
+        return "Oracle form: SELECT columns FROM table_name WHERE condition; Use * to select every column.";
+      default:
+        return "Use the Oracle SQL statement form for this command.";
+    }
   }
 
   function showScreen(name) {
@@ -80,6 +109,8 @@
 
   function startExam(candidate) {
     state.candidate = candidate;
+    attemptIndicator.textContent = "Attempt " + candidate.attemptNumber;
+    attemptIndicator.hidden = false;
     state.questions = selectQuestions();
     state.answers = new Array(state.questions.length).fill(null);
     state.currentIndex = 0;
@@ -110,47 +141,48 @@
 
     const meta = document.createElement("div");
     meta.className = "question-meta";
-    [question.unit, question.difficulty].forEach(function (text, index) {
-      const tag = document.createElement("span");
-      tag.className = index === 1 ? "tag tag-difficulty" : "tag";
-      tag.textContent = text;
-      meta.appendChild(tag);
-    });
+    const tag = document.createElement("span");
+    tag.className = "tag";
+    tag.textContent = question.category;
+    meta.appendChild(tag);
 
     const title = document.createElement("h2");
     title.id = "question-title";
     title.textContent = question.question;
     questionSection.append(meta, title);
 
-    const options = document.createElement("div");
-    options.className = "options";
-    question.options.forEach(function (option, optionIndex) {
-      const label = document.createElement("label");
-      label.className = "option";
-      const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "answer";
-      input.value = option;
-      input.checked = state.answers[state.currentIndex] === option;
-      input.addEventListener("change", function () {
-        state.answers[state.currentIndex] = option;
-        updateProgress();
-      });
-      const text = document.createElement("span");
-      text.textContent = String.fromCharCode(65 + optionIndex) + ". " + option;
-      label.append(input, text);
-      options.appendChild(label);
+    const answerLabel = document.createElement("label");
+    answerLabel.className = "answer-label";
+    answerLabel.htmlFor = "query-answer";
+    answerLabel.textContent = "Your SQL query";
+    const answer = document.createElement("textarea");
+    answer.id = "query-answer";
+    answer.name = "answer";
+    answer.rows = 5;
+    answer.spellcheck = false;
+    answer.autocapitalize = "off";
+    answer.autocomplete = "off";
+    answer.autocorrect = "off";
+    answer.placeholder = "Write the SQL query only";
+    answer.value = state.answers[state.currentIndex] || "";
+    answer.addEventListener("input", function () {
+      state.answers[state.currentIndex] = answer.value;
+      updateProgress();
     });
 
-    questionSection.appendChild(options);
+    questionSection.append(answerLabel, answer);
     questionContainer.replaceChildren(questionSection);
+    syntaxTip.textContent = getSyntaxTip(question);
+    syntaxTip.hidden = true;
+    tipButton.setAttribute("aria-expanded", "false");
     document.getElementById("previous-button").disabled = state.currentIndex === 0;
     document.getElementById("next-button").disabled = state.currentIndex === state.questions.length - 1;
+    submitButton.hidden = state.currentIndex !== state.questions.length - 1;
     updateProgress();
   }
 
   function updateProgress() {
-    const answered = state.answers.filter(function (answer) { return answer !== null; }).length;
+    const answered = state.answers.filter(function (answer) { return answer && answer.trim(); }).length;
     document.getElementById("progress-label").textContent = "Question " + (state.currentIndex + 1) + " of " + state.questions.length;
     document.getElementById("answered-label").textContent = answered + " answered";
     document.getElementById("progress-bar").style.width = ((state.currentIndex + 1) / state.questions.length * 100) + "%";
@@ -161,11 +193,12 @@
     state.active = false;
     window.clearInterval(state.timerId);
     const score = state.questions.reduce(function (total, question, index) {
-      return total + (state.answers[index] === question.answer ? 1 : 0);
+      return total + (normalizeSql(state.answers[index]) === normalizeSql(question.answer) ? 1 : 0);
     }, 0);
     const submittedAt = new Date().toISOString();
     state.latestAttempt = {
-      enrollmentNumber: state.candidate.enrollmentNumber,
+      seatNumber: state.candidate.seatNumber,
+      attemptNumber: state.candidate.attemptNumber,
       name: state.candidate.name,
       score: score,
       maxMarks: state.questions.length,
@@ -194,7 +227,7 @@
     document.getElementById("result-message").textContent = "Thank you, " + state.candidate.name + ". Your attempt has been recorded.";
     document.getElementById("score-value").textContent = state.latestAttempt.score + " / " + state.latestAttempt.maxMarks;
     document.getElementById("percentage-value").textContent = state.latestAttempt.percentage + "%";
-    document.getElementById("result-reason").textContent = "Submission reason: " + reason + ". Enrolment number: " + state.candidate.enrollmentNumber + ".";
+    document.getElementById("result-reason").textContent = "Submission reason: " + reason + ". Seat number: " + state.candidate.seatNumber + ".";
     storageWarning.hidden = state.storageAvailable;
     renderRecords();
     renderReview();
@@ -235,7 +268,7 @@
     }
     attempts.forEach(function (attempt) {
       const row = document.createElement("tr");
-      [attempt.enrollmentNumber, attempt.name, attempt.score + " / " + attempt.maxMarks, formatDate(attempt.submittedAt)].forEach(function (value) {
+      [attempt.seatNumber || attempt.enrollmentNumber, attempt.name, attempt.score + " / " + attempt.maxMarks, formatDate(attempt.submittedAt)].forEach(function (value) {
         const cell = document.createElement("td");
         cell.textContent = value;
         row.appendChild(cell);
@@ -253,13 +286,12 @@
       const title = document.createElement("h3");
       title.textContent = (index + 1) + ". " + question.question;
       const submitted = document.createElement("p");
-      submitted.className = state.answers[index] === question.answer ? "correct-answer" : "wrong-answer";
-      submitted.textContent = "Your answer: " + (state.answers[index] || "Not answered");
+      const isCorrect = normalizeSql(state.answers[index]) === normalizeSql(question.answer);
+      submitted.className = isCorrect ? "correct-answer" : "wrong-answer";
+      submitted.textContent = "Your query: " + (state.answers[index] || "Not answered");
       const correct = document.createElement("p");
-      correct.textContent = "Correct answer: " + question.answer;
-      const explanation = document.createElement("p");
-      explanation.textContent = question.explanation;
-      item.append(title, submitted, correct, explanation);
+      correct.textContent = "Expected query: " + question.answer;
+      item.append(title, submitted, correct);
       review.appendChild(item);
     });
   }
@@ -276,10 +308,10 @@
   }
 
   function downloadCsv(attempts, filename) {
-    const headers = ["Enrolment Number", "Name", "Score", "Maximum Marks", "Percentage", "Started At", "Submitted At", "Submission Reason"];
+    const headers = ["Seat Number", "Attempt Number", "Name", "Score", "Maximum Marks", "Percentage", "Started At", "Submitted At", "Submission Reason"];
     const rows = attempts.map(function (attempt) {
       return [
-        attempt.enrollmentNumber, attempt.name, attempt.score, attempt.maxMarks,
+        attempt.seatNumber || attempt.enrollmentNumber, attempt.attemptNumber, attempt.name, attempt.score, attempt.maxMarks,
         attempt.percentage + "%", attempt.startedAt, attempt.submittedAt,
         attempt.submissionReason
       ];
@@ -300,16 +332,21 @@
 
   form.addEventListener("submit", function (event) {
     event.preventDefault();
-    const enrollmentNumber = document.getElementById("enrollment").value.trim();
+    const seatNumber = document.getElementById("seat-number").value.trim();
     const name = document.getElementById("candidate-name").value.trim();
-    if (!enrollmentNumber || !name) {
-      formError.textContent = "Enter both your enrolment number and full name to continue.";
+    if (!seatNumber || !name) {
+      formError.textContent = "Enter both your seat number and full name to continue.";
       formError.hidden = false;
       return;
     }
     formError.hidden = true;
     state.attempts = loadAttempts();
-    startExam({ enrollmentNumber: enrollmentNumber, name: name });
+    const normalizedSeatNumber = seatNumber.trim().toUpperCase();
+    const attemptNumber = state.attempts.filter(function (attempt) {
+      const savedSeatNumber = String(attempt.seatNumber || attempt.enrollmentNumber || "").trim().toUpperCase();
+      return savedSeatNumber === normalizedSeatNumber;
+    }).length + 1;
+    startExam({ seatNumber: seatNumber, name: name, attemptNumber: attemptNumber });
   });
 
   document.getElementById("previous-button").addEventListener("click", function () {
@@ -326,6 +363,11 @@
   });
   document.getElementById("submit-button").addEventListener("click", function () {
     submitExam("Submitted by candidate");
+  });
+  tipButton.addEventListener("click", function () {
+    const expanded = tipButton.getAttribute("aria-expanded") === "true";
+    tipButton.setAttribute("aria-expanded", String(!expanded));
+    syntaxTip.hidden = expanded;
   });
   document.getElementById("download-results-button").addEventListener("click", function () {
     downloadCsv([state.latestAttempt], "dbms-quiz-result.csv");

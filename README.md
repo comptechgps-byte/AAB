@@ -1,16 +1,16 @@
-# DBMS Quiz — Course 313302
+# DBMS SQL Query Quiz
 
-A browser-based, five-minute quiz based on the five theory units in the MSBTE Database Management System (K Scheme) syllabus supplied with this project.
+A browser-based Oracle SQL writing quiz. Students enter Oracle SQL statements in a text answer box; there are no multiple-choice answers.
 
 ## Run the quiz
 
 Open `index.html` in a modern browser. No package installation or internet connection is required. For more reliable browser storage, serve this folder over HTTP (for example, with any local static web server) and open its local URL.
 
-Enter an enrolment number and name to start. Each attempt randomly draws 10 questions from the 500-question bank: exactly 4 Simple, 3 Intermediate, and 3 Complex questions. Questions and answer choices are shuffled. The five-minute timer submits automatically; submitting manually, switching or hiding the tab, or leaving focus on the browser window ends the attempt immediately.
+Enter a seat number and name to start. Your attempt number is shown in the page header and increases for each saved attempt with the same seat number. Use Oracle SQL syntax for every answer. Each attempt randomly draws 5 questions from the 50-question bank, covering `CREATE TABLE`, `DROP TABLE`, `RENAME`, `ALTER TABLE`, `TRUNCATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, and `SELECT`. Each correct query earns 1 mark. Grading ignores SQL keyword case, formatting whitespace, and an optional final semicolon; the query must otherwise match the expected answer. The 10-minute timer submits automatically. Submitting manually, switching or hiding the tab, or leaving focus on the browser window ends the attempt immediately.
 
 ## Results and marks
 
-Attempt records are saved in the current browser's local storage. Download the current result or export all saved attempts as a UTF-8 CSV with a byte-order mark, which opens in Microsoft Excel. The export includes enrolment number, name, marks, percentage, start and submission times, and submission reason. Export records regularly and keep the downloaded file somewhere safe.
+Attempt records are saved in the current browser's local storage. Download the current result or export all saved attempts as a UTF-8 CSV with a byte-order mark, which opens in Microsoft Excel. The export includes seat number, attempt number, name, marks, percentage, start and submission times, and submission reason. Export records regularly and keep the downloaded file somewhere safe.
 
 **Storage is local to one browser and device.** This project has no server or shared gradebook, so results do not automatically reach an instructor or appear on another device. Collect the exported CSV files to consolidate marks.
 
@@ -20,4 +20,4 @@ The quiz submits when the browser reports that its tab is hidden or the browser 
 
 ## Question bank
 
-`questions.js` builds 500 individually identified question records from 100 syllabus-aligned question templates and five distinct application contexts. Each record belongs to one syllabus unit and one of the three difficulty levels; the assessment avoids repeating a template within the same attempt.
+`sql-questions.js` contains 50 Oracle SQL query-writing questions. Five distinct questions are selected at random for each attempt.
