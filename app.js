@@ -63,6 +63,35 @@
       .join("");
   }
 
+  function getMatchPercentage(query, expected) {
+    const queryTokens = normalizeSql(query).match(/'(?:''|[^'])*'|"(?:""|[^"])*"|[a-z0-9_$#]+|<=|>=|<>|!=|:=|[^\s]/g) || [];
+    const expectedTokens = normalizeSql(expected).match(/'(?:''|[^'])*'|"(?:""|[^"])*"|[a-z0-9_$#]+|<=|>=|<>|!=|:=|[^\s]/g) || [];
+    if (queryTokens.length === 0 || expectedTokens.length === 0) return 0;
+
+    let previousRow = expectedTokens.map(function (_, index) { return index + 1; });
+    previousRow.unshift(0);
+    queryTokens.forEach(function (queryToken, queryIndex) {
+      const currentRow = [queryIndex + 1];
+      expectedTokens.forEach(function (expectedToken, expectedIndex) {
+        const substitutionCost = queryToken === expectedToken ? 0 : 1;
+        currentRow.push(Math.min(
+          currentRow[expectedIndex] + 1,
+          previousRow[expectedIndex + 1] + 1,
+          previousRow[expectedIndex] + substitutionCost
+        ));
+      });
+      previousRow = currentRow;
+    });
+
+    const longestQueryLength = Math.max(queryTokens.length, expectedTokens.length);
+    const distance = previousRow[expectedTokens.length];
+    return Math.round((1 - distance / longestQueryLength) * 100);
+  }
+
+  function getMarks(query, expected) {
+    return getMatchPercentage(query, expected) / 100;
+  }
+
   function getSyntaxTip(question) {
     switch (question.category) {
       case "CREATE TABLE":
@@ -192,9 +221,9 @@
     if (!state.active) return;
     state.active = false;
     window.clearInterval(state.timerId);
-    const score = state.questions.reduce(function (total, question, index) {
-      return total + (normalizeSql(state.answers[index]) === normalizeSql(question.answer) ? 1 : 0);
-    }, 0);
+    const score = Math.round(state.questions.reduce(function (total, question, index) {
+      return total + getMarks(state.answers[index], question.answer);
+    }, 0) * 100) / 100;
     const submittedAt = new Date().toISOString();
     state.latestAttempt = {
       seatNumber: state.candidate.seatNumber,
@@ -286,9 +315,11 @@
       const title = document.createElement("h3");
       title.textContent = (index + 1) + ". " + question.question;
       const submitted = document.createElement("p");
-      const isCorrect = normalizeSql(state.answers[index]) === normalizeSql(question.answer);
-      submitted.className = isCorrect ? "correct-answer" : "wrong-answer";
-      submitted.textContent = "Your query: " + (state.answers[index] || "Not answered");
+      const matchPercentage = getMatchPercentage(state.answers[index], question.answer);
+      const marks = matchPercentage / 100;
+      submitted.className = matchPercentage === 100 ? "correct-answer" : "wrong-answer";
+      submitted.textContent = "Your query: " + (state.answers[index] || "Not answered") +
+        " (" + matchPercentage + "% match; " + marks.toFixed(2) + " / 1 mark)";
       const correct = document.createElement("p");
       correct.textContent = "Expected query: " + question.answer;
       item.append(title, submitted, correct);
