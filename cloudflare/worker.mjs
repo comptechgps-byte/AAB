@@ -63,6 +63,8 @@ async function appendScore(token, seatNumber, score) {
     });
     if (response.ok) return;
     if (response.status !== 409 && response.status !== 422) {
+      console.error("GitHub PUT store.csv failed.", response.status, await response.text(),
+        "needs:", response.headers.get("X-Accepted-GitHub-Permissions"));
       throw new Error("GitHub could not update store.csv (HTTP " + response.status + ").");
     }
   }
