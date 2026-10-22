@@ -4,6 +4,7 @@
   const STORAGE_KEY = "dbmsQuizAttemptsV1";
   const EXAM_SECONDS = 10 * 60;
   const QUESTIONS_PER_ATTEMPT = 5;
+  const SCORE_API_URL = document.querySelector('meta[name="score-api-url"]').content.trim();
   const screens = {
     welcome: document.getElementById("welcome-screen"),
     exam: document.getElementById("exam-screen"),
@@ -20,7 +21,9 @@
     timerId: null,
     latestAttempt: null,
     attempts: [],
-    storageAvailable: true
+    storageAvailable: true,
+    fullscreenEntered: false,
+    windowSize: null
   };
 
   const form = document.getElementById("candidate-form");
@@ -28,10 +31,13 @@
   const questionContainer = document.getElementById("question-container");
   const timer = document.getElementById("timer");
   const storageWarning = document.getElementById("storage-warning");
+  const githubSaveStatus = document.getElementById("github-save-status");
+  const retryGithubSaveButton = document.getElementById("retry-github-save-button");
   const attemptIndicator = document.getElementById("attempt-indicator");
   const submitButton = document.getElementById("submit-button");
   const tipButton = document.getElementById("tip-button");
   const syntaxTip = document.getElementById("syntax-tip");
+  const monitoringWarning = document.getElementById("monitoring-warning");
   const matchPreview = document.createElement("p");
   matchPreview.className = "match-preview";
   matchPreview.setAttribute("role", "status");
@@ -102,7 +108,7 @@
     }
     const matchPercentage = getMatchPercentage(query, expected);
     matchPreview.textContent = "Provisional match: " + matchPercentage + "% — " +
-      (matchPercentage / 100).toFixed(2) + " / 1 mark";
+      (matchPercentage / 100 * 5).toFixed(2) + " / 5 marks";
   }
 
   function getSyntaxTip(question) {
@@ -149,6 +155,31 @@
     window.scrollTo(0, 0);
   }
 
+  function getWindowSize() {
+    return {
+      width: window.outerWidth || window.innerWidth,
+      height: window.outerHeight || 0
+    };
+  }
+
+  function requestExamFullscreen() {
+    if (typeof screens.exam.requestFullscreen !== "function") {
+      monitoringWarning.hidden = false;
+      return;
+    }
+
+    try {
+      screens.exam.requestFullscreen().then(function () {
+        state.fullscreenEntered = true;
+        state.windowSize = getWindowSize();
+      }, function () {
+        monitoringWarning.hidden = false;
+      });
+    } catch (error) {
+      monitoringWarning.hidden = false;
+    }
+  }
+
   function startExam(candidate) {
     state.candidate = candidate;
     attemptIndicator.textContent = "Attempt " + candidate.attemptNumber;
@@ -160,6 +191,10 @@
     state.deadline = Date.now() + EXAM_SECONDS * 1000;
     state.active = true;
     showScreen("exam");
+    state.fullscreenEntered = false;
+    state.windowSize = getWindowSize();
+    monitoringWarning.hidden = true;
+    requestExamFullscreen();
     renderQuestion();
     updateTimer();
     state.timerId = window.setInterval(updateTimer, 250);
@@ -236,17 +271,26 @@
     if (!state.active) return;
     state.active = false;
     window.clearInterval(state.timerId);
-    const score = Math.round(state.questions.reduce(function (total, question, index) {
+    if (document.fullscreenElement) {
+      document.exitFullscreen().catch(function (error) {
+        console.error("Could not exit fullscreen after the exam ended.", error);
+      });
+    }
+    const earnedMarks = state.questions.reduce(function (total, question, index) {
       return total + getMarks(state.answers[index], question.answer);
-    }, 0) * 100) / 100;
+    }, 0);
+    const calculatedScore = Math.round(earnedMarks * 500) / 100;
+    const promoted = calculatedScore < 10;
+    const score = promoted ? 10 : calculatedScore;
     const submittedAt = new Date().toISOString();
     state.latestAttempt = {
       seatNumber: state.candidate.seatNumber,
       attemptNumber: state.candidate.attemptNumber,
       name: state.candidate.name,
       score: score,
-      maxMarks: state.questions.length,
-      percentage: Math.round(score / state.questions.length * 100),
+      maxMarks: state.questions.length * 5,
+      percentage: Math.round(score / (state.questions.length * 5) * 100),
+      promoted: promoted,
       startedAt: state.startedAt,
       submittedAt: submittedAt,
       submissionReason: reason
@@ -264,12 +308,51 @@
       storageWarning.textContent = "Saved attempts could not be read from this browser. Download the CSV now to keep this result.";
     }
     renderResult(reason);
+    saveAttemptToGitHub(state.latestAttempt);
+  }
+
+  async function saveAttemptToGitHub(attempt) {
+    githubSaveStatus.classList.remove("is-error");
+    githubSaveStatus.textContent = "Saving seat number and score to GitHub...";
+    retryGithubSaveButton.hidden = true;
+    retryGithubSaveButton.disabled = true;
+    try {
+      if (!SCORE_API_URL || SCORE_API_URL.indexOf("<") !== -1) {
+        throw new Error("The score API URL has not been configured.");
+      }
+      const response = await window.fetch(SCORE_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ seatNumber: attempt.seatNumber, score: attempt.score })
+      });
+      if (!response.ok) {
+        let errorMessage = "HTTP " + response.status;
+        try {
+          const result = await response.json();
+          if (result.error) errorMessage = result.error;
+        } catch (error) {
+          console.error("Could not read the score API error response.", error);
+        }
+        throw new Error(errorMessage);
+      }
+      githubSaveStatus.textContent = "Seat number and score saved to GitHub (main/store.csv).";
+    } catch (error) {
+      console.error("Could not save the quiz score to GitHub.", error);
+      githubSaveStatus.classList.add("is-error");
+      githubSaveStatus.textContent = "GitHub save failed: " + error.message + " You can retry the save.";
+      retryGithubSaveButton.hidden = false;
+    } finally {
+      retryGithubSaveButton.disabled = false;
+    }
   }
 
   function renderResult(reason) {
     document.getElementById("result-heading").textContent = reason === "Submitted by candidate" ? "Assessment submitted" : "Assessment ended";
     document.getElementById("result-message").textContent = "Thank you, " + state.candidate.name + ". Your attempt has been recorded.";
     document.getElementById("score-value").textContent = state.latestAttempt.score + " / " + state.latestAttempt.maxMarks;
+    const promotionNote = document.getElementById("promotion-note");
+    promotionNote.hidden = !state.latestAttempt.promoted;
+    promotionNote.textContent = "You failed, but were promoted with passing marks.";
     document.getElementById("percentage-value").textContent = state.latestAttempt.percentage + "%";
     document.getElementById("result-reason").textContent = "Submission reason: " + reason + ". Seat number: " + state.candidate.seatNumber + ".";
     storageWarning.hidden = state.storageAvailable;
@@ -331,10 +414,10 @@
       title.textContent = (index + 1) + ". " + question.question;
       const submitted = document.createElement("p");
       const matchPercentage = getMatchPercentage(state.answers[index], question.answer);
-      const marks = matchPercentage / 100;
+      const marks = matchPercentage / 100 * 5;
       submitted.className = matchPercentage === 100 ? "correct-answer" : "wrong-answer";
       submitted.textContent = "Your query: " + (state.answers[index] || "Not answered") +
-        " (" + matchPercentage + "% match; " + marks.toFixed(2) + " / 1 mark)";
+        " (" + matchPercentage + "% match; " + marks.toFixed(2) + " / 5 marks)";
       const correct = document.createElement("p");
       correct.textContent = "Expected query: " + question.answer;
       item.append(title, submitted, correct);
@@ -354,11 +437,11 @@
   }
 
   function downloadCsv(attempts, filename) {
-    const headers = ["Seat Number", "Attempt Number", "Name", "Score", "Maximum Marks", "Percentage", "Started At", "Submitted At", "Submission Reason"];
+    const headers = ["Seat Number", "Attempt Number", "Name", "Score", "Maximum Marks", "Percentage", "Promoted", "Started At", "Submitted At", "Submission Reason"];
     const rows = attempts.map(function (attempt) {
       return [
         attempt.seatNumber || attempt.enrollmentNumber, attempt.attemptNumber, attempt.name, attempt.score, attempt.maxMarks,
-        attempt.percentage + "%", attempt.startedAt, attempt.submittedAt,
+        attempt.percentage + "%", attempt.promoted ? "Yes" : "No", attempt.startedAt, attempt.submittedAt,
         attempt.submissionReason
       ];
     });
@@ -382,6 +465,11 @@
     const name = document.getElementById("candidate-name").value.trim();
     if (!seatNumber || !name) {
       formError.textContent = "Enter both your seat number and full name to continue.";
+      formError.hidden = false;
+      return;
+    }
+    if (!/^\d+$/.test(seatNumber)) {
+      formError.textContent = "Seat number must contain numbers only.";
       formError.hidden = false;
       return;
     }
@@ -421,10 +509,32 @@
   document.getElementById("export-all-button").addEventListener("click", function () {
     downloadCsv(state.attempts, "dbms-quiz-all-results.csv");
   });
+  retryGithubSaveButton.addEventListener("click", function () {
+    if (state.latestAttempt) saveAttemptToGitHub(state.latestAttempt);
+  });
 
   document.addEventListener("visibilitychange", function () {
     if (state.active && document.visibilityState === "hidden") {
       submitExam("Browser tab switched or hidden");
+    }
+  });
+  document.addEventListener("fullscreenchange", function () {
+    if (!state.active) return;
+    if (document.fullscreenElement) {
+      state.fullscreenEntered = true;
+      state.windowSize = getWindowSize();
+    } else if (state.fullscreenEntered) {
+      submitExam("Fullscreen mode exited");
+    }
+  });
+  window.addEventListener("resize", function () {
+    if (!state.active || !state.windowSize) return;
+    const currentSize = getWindowSize();
+    const widthChanged = Math.abs(currentSize.width - state.windowSize.width) / state.windowSize.width > 0.2;
+    const heightChanged = state.windowSize.height > 0 && currentSize.height > 0 &&
+      Math.abs(currentSize.height - state.windowSize.height) / state.windowSize.height > 0.2;
+    if (widthChanged || heightChanged) {
+      submitExam("Exam window resized or entered split-screen mode");
     }
   });
   window.addEventListener("blur", function () {

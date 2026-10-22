@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#102a43">
+  <meta name="score-api-url" content="https://aab-score-api.comptechgps.workers.dev">
   <title>Database Management System | Quiz</title>
   <link rel="stylesheet" href="styles.css">
 </head>
@@ -27,21 +28,21 @@
       <div class="exam-facts" aria-label="Exam format">
         <div><strong>5</strong><span>questions per attempt</span></div>
         <div><strong>10 min</strong><span>time limit</span></div>
-        <div><strong>5</strong><span>marks</span></div>
+        <div><strong>25</strong><span>marks total</span></div>
         <div><strong>50</strong><span>questions in bank</span></div>
       </div>
       <form id="candidate-form" novalidate>
         <label for="seat-number">Seat number</label>
-        <input id="seat-number" name="seatNumber" autocomplete="off" maxlength="40" required placeholder="Enter your seat number">
+        <input id="seat-number" name="seatNumber" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="40" required aria-describedby="form-error" placeholder="Enter your seat number">
         <label for="candidate-name">Full name</label>
         <input id="candidate-name" name="candidateName" autocomplete="name" maxlength="100" required placeholder="Enter your name">
         <p id="form-error" class="error-message" role="alert" hidden></p>
         <button class="button button-primary button-wide" type="submit">Start exam <span aria-hidden="true">→</span></button>
       </form>
-      <div class="notice"><strong>Important:</strong> Enter only the SQL query in the answer box. Your exam will be submitted immediately if you switch tabs or leave this browser window.</div>
+      <div class="notice"><strong>Important:</strong> Enter only the SQL query in the answer box. The exam will attempt to enter fullscreen and will be submitted if you switch tabs, leave fullscreen, or significantly resize the exam window. A browser cannot prevent the device itself from being minimized or guarantee detection of every split-screen mode.</div>
       <details class="privacy-note">
         <summary>How exam monitoring and results work</summary>
-        <p>This browser-only app detects when its tab becomes hidden or its window loses focus. Browser security does not allow it to reliably detect every operating-system screen switch or prevent a determined user from bypassing client-side checks. Attempts and scores are stored in this browser only; export the CSV regularly and keep it on a trusted device.</p>
+        <p>This app attempts to use fullscreen and detects when its tab becomes hidden, its window loses focus, fullscreen is exited, or the exam window is significantly resized. It cannot prevent the device from being minimized or reliably detect every operating-system screen switch or split-screen mode. Browser history remains on this device. Each submitted seat number and score is also committed to <code>store.csv</code> in the GitHub repository when the score API is configured and reachable.</p>
       </details>
     </section>
 
@@ -50,6 +51,7 @@
         <div><span class="eyebrow">IN PROGRESS</span><h1 id="exam-heading">Your assessment</h1></div>
         <div id="timer" class="timer" role="timer" aria-live="off">10:00</div>
       </div>
+      <p id="monitoring-warning" class="monitoring-warning" role="status" hidden>Fullscreen could not be enabled. Keep this browser window open; tab changes, focus loss, and significant window resizing will still end the attempt.</p>
       <div class="progress-row"><span id="progress-label">Question 1 of 5</span><span id="answered-label">0 answered</span></div>
       <div class="progress-track"><span id="progress-bar"></span></div>
       <div id="question-container"></div>
@@ -66,10 +68,12 @@
       <div class="eyebrow">ATTEMPT RECORDED</div>
       <h1 id="result-heading">Assessment submitted</h1>
       <p id="result-message" class="intro"></p>
-      <div class="score-panel"><span>Your score</span><strong id="score-value">0 / 5</strong><span id="percentage-value">0%</span></div>
+      <div class="score-panel"><span>Your score</span><strong id="score-value">0 / 25</strong><span id="promotion-note" class="promotion-note" hidden></span><span id="percentage-value">0%</span></div>
       <p id="result-reason" class="result-reason"></p>
+      <p id="github-save-status" class="github-save-status" role="status" aria-live="polite"></p>
       <div class="result-actions">
         <button id="download-results-button" class="button button-primary" type="button">Download results for Excel (.csv)</button>
+        <button id="retry-github-save-button" class="button button-secondary" type="button" hidden>Retry GitHub save</button>
       </div>
       <section class="record-section">
         <div class="record-heading"><div><h2>Saved attempts</h2><p>Results saved in this browser</p></div><button id="export-all-button" class="button button-small button-secondary" type="button">Export all</button></div>

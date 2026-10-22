@@ -80,14 +80,18 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #
 #query-answer { min-height: 150px; padding: 14px; resize: vertical; font-family: Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.6; tab-size: 2; }
 .match-preview { margin: 9px 0 0; color: var(--blue); font-size: 13px; font-weight: 700; }
 .syntax-tip { margin: 0 0 16px; padding: 12px 14px; border-left: 3px solid var(--green); color: #315448; background: #f0f7f4; font-size: 13px; line-height: 1.55; }
+.monitoring-warning { margin: 18px 0 0; padding: 11px 13px; border: 1px solid #f0d9a3; border-radius: 9px; color: #725318; background: #fffaf0; font-size: 12px; line-height: 1.5; }
 .exam-controls { display: flex; align-items: center; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
 #submit-button { margin-left: auto; }
 .result-card { padding: clamp(24px, 5vw, 45px); }
 .score-panel { display: flex; align-items: baseline; gap: 12px; margin: 26px 0 14px; padding: 22px; border-radius: 13px; background: #eff7f5; }
 .score-panel span:first-child { color: #43675d; font-size: 13px; }
 .score-panel strong { color: #17654f; font-size: 30px; }
+.score-panel .promotion-note { color: var(--red); font-size: 12px; font-weight: 700; line-height: 1.5; }
 .score-panel span:last-child { margin-left: auto; color: #43675d; font-size: 14px; }
 .result-reason { color: var(--muted); font-size: 13px; }
+.github-save-status { color: var(--muted); font-size: 13px; }
+.github-save-status.is-error { color: var(--red); }
 .result-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 34px; }
 .record-section { padding-top: 22px; border-top: 1px solid var(--line); }
 .record-heading { display: flex; justify-content: space-between; align-items: center; gap: 14px; margin-bottom: 14px; }
@@ -116,6 +120,7 @@ th { color: var(--muted); font-size: 11px; }
   .exam-controls { flex-wrap: wrap; }
   .exam-controls .button { flex: 1; padding-inline: 10px; font-size: 12px; }
   #submit-button { order: 3; flex-basis: 100%; margin-left: 0; }
-  .score-panel { gap: 7px; padding: 18px 14px; }
+  .score-panel { flex-wrap: wrap; gap: 7px; padding: 18px 14px; }
   .score-panel strong { font-size: 25px; }
+  .score-panel .promotion-note { flex-basis: 100%; }
 }
