@@ -32,6 +32,9 @@
   const submitButton = document.getElementById("submit-button");
   const tipButton = document.getElementById("tip-button");
   const syntaxTip = document.getElementById("syntax-tip");
+  const matchPreview = document.createElement("p");
+  matchPreview.className = "match-preview";
+  matchPreview.setAttribute("role", "status");
 
   function shuffle(items) {
     const shuffled = items.slice();
@@ -90,6 +93,16 @@
 
   function getMarks(query, expected) {
     return getMatchPercentage(query, expected) / 100;
+  }
+
+  function updateMatchPreview(query, expected) {
+    if (!query.trim()) {
+      matchPreview.textContent = "Type your SQL query to see its provisional match and marks.";
+      return;
+    }
+    const matchPercentage = getMatchPercentage(query, expected);
+    matchPreview.textContent = "Provisional match: " + matchPercentage + "% — " +
+      (matchPercentage / 100).toFixed(2) + " / 1 mark";
   }
 
   function getSyntaxTip(question) {
@@ -194,12 +207,14 @@
     answer.autocorrect = "off";
     answer.placeholder = "Write the SQL query only";
     answer.value = state.answers[state.currentIndex] || "";
+    updateMatchPreview(answer.value, question.answer);
     answer.addEventListener("input", function () {
       state.answers[state.currentIndex] = answer.value;
       updateProgress();
+      updateMatchPreview(answer.value, question.answer);
     });
 
-    questionSection.append(answerLabel, answer);
+    questionSection.append(answerLabel, answer, matchPreview);
     questionContainer.replaceChildren(questionSection);
     syntaxTip.textContent = getSyntaxTip(question);
     syntaxTip.hidden = true;
