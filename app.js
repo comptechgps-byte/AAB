@@ -346,7 +346,7 @@
       }
       const result = await response.json();
       githubSaveStatus.textContent = result.finalized
-        ? "Your best score after 3 attempts was saved to GitHub (main/store.csv)."
+        ? "Your best score is recorded"
         : "Attempt " + result.attemptCount + " of 3 saved. Your best score will be saved after your third attempt.";
       attemptCompletionMessage.hidden = false;
       if (result.finalized) {
