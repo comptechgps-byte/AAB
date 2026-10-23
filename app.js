@@ -43,9 +43,6 @@
   const syntaxTip = document.getElementById("syntax-tip");
   const monitoringWarning = document.getElementById("monitoring-warning");
   const startButton = form.querySelector('button[type="submit"]');
-  const matchPreview = document.createElement("p");
-  matchPreview.className = "match-preview";
-  matchPreview.setAttribute("role", "status");
 
   function shuffle(items) {
     const shuffled = items.slice();
@@ -104,16 +101,6 @@
 
   function getMarks(query, expected) {
     return getMatchPercentage(query, expected) / 100;
-  }
-
-  function updateMatchPreview(query, expected) {
-    if (!query.trim()) {
-      matchPreview.textContent = "Type your SQL query to see its provisional match and marks.";
-      return;
-    }
-    const matchPercentage = getMatchPercentage(query, expected);
-    matchPreview.textContent = "Provisional match: " + matchPercentage + "% — " +
-      (matchPercentage / 100 * 5).toFixed(2) + " / 5 marks";
   }
 
   function getSyntaxTip(question) {
@@ -247,14 +234,12 @@
     answer.autocorrect = "off";
     answer.placeholder = "Write the SQL query only";
     answer.value = state.answers[state.currentIndex] || "";
-    updateMatchPreview(answer.value, question.answer);
     answer.addEventListener("input", function () {
       state.answers[state.currentIndex] = answer.value;
       updateProgress();
-      updateMatchPreview(answer.value, question.answer);
     });
 
-    questionSection.append(answerLabel, answer, matchPreview);
+    questionSection.append(answerLabel, answer);
     questionContainer.replaceChildren(questionSection);
     syntaxTip.textContent = getSyntaxTip(question);
     syntaxTip.hidden = true;
@@ -446,10 +431,8 @@
       title.textContent = (index + 1) + ". " + question.question;
       const submitted = document.createElement("p");
       const matchPercentage = getMatchPercentage(state.answers[index], question.answer);
-      const marks = matchPercentage / 100 * 5;
       submitted.className = matchPercentage === 100 ? "correct-answer" : "wrong-answer";
-      submitted.textContent = "Your query: " + (state.answers[index] || "Not answered") +
-        " (" + matchPercentage + "% match; " + marks.toFixed(2) + " / 5 marks)";
+      submitted.textContent = "Your query: " + (state.answers[index] || "Not answered");
       const correct = document.createElement("p");
       correct.textContent = "Expected query: " + question.answer;
       item.append(title, submitted, correct);

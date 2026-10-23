@@ -78,7 +78,6 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #
 .question h2 { max-width: 680px; margin: 0 0 20px; color: var(--navy); font-size: clamp(19px, 3.6vw, 24px); line-height: 1.5; }
 .answer-label { display: block; margin: 0 0 8px; color: #263f52; font-size: 13px; font-weight: 700; }
 #query-answer { min-height: 150px; padding: 14px; resize: vertical; font-family: Consolas, "Courier New", monospace; font-size: 14px; line-height: 1.6; tab-size: 2; }
-.match-preview { margin: 9px 0 0; color: var(--blue); font-size: 13px; font-weight: 700; }
 .syntax-tip { margin: 0 0 16px; padding: 12px 14px; border-left: 3px solid var(--green); color: #315448; background: #f0f7f4; font-size: 13px; line-height: 1.55; }
 .monitoring-warning { margin: 18px 0 0; padding: 11px 13px; border: 1px solid #f0d9a3; border-radius: 9px; color: #725318; background: #fffaf0; font-size: 12px; line-height: 1.5; }
 .exam-controls { display: flex; align-items: center; gap: 10px; padding-top: 18px; border-top: 1px solid var(--line); }
