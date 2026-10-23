@@ -581,6 +581,33 @@
     }
   });
 
+  document.getElementById("admin-clear-link").addEventListener("click", async function () {
+    const passcode = window.prompt("Enter the passcode to delete the contents of store.csv:");
+    if (passcode === null) return;
+    if (!window.confirm("Delete all scores from store.csv? This cannot be undone.")) return;
+
+    const adminStatus = document.getElementById("admin-status");
+    adminStatus.hidden = false;
+    adminStatus.textContent = "Deleting store.csv contents...";
+    try {
+      const response = await window.fetch(SCORE_API_URL + "?action=clear", {
+        method: "POST",
+        headers: { "X-Admin-Code": passcode }
+      });
+      let result = {};
+      try {
+        result = await response.json();
+      } catch (error) {
+        console.error("Could not read the clear API response.", error);
+      }
+      if (!response.ok) throw new Error(result.error || "Could not delete store.csv contents.");
+      adminStatus.textContent = "store.csv contents deleted.";
+    } catch (error) {
+      console.error("Could not clear store.csv.", error);
+      adminStatus.textContent = error.message;
+    }
+  });
+
   document.addEventListener("visibilitychange", function () {
     if (state.active && document.visibilityState === "hidden") {
       submitExam("Browser tab switched or hidden");

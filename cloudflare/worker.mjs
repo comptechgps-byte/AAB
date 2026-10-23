@@ -60,7 +60,7 @@ async function readCsvFile(token) {
   return { content: content, sha: file.sha };
 }
 
-async function writeCsv(token, transform) {
+async function writeCsv(token, transform, commitMessage) {
   const fileUrl = GITHUB_API + "/repos/" + GITHUB_OWNER + "/" + GITHUB_REPOSITORY +
     "/contents/" + encodeURIComponent(CSV_PATH);
   for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -75,7 +75,7 @@ async function writeCsv(token, transform) {
     let binaryContent = "";
     bytes.forEach(function (byte) { binaryContent += String.fromCharCode(byte); });
     const body = {
-      message: "Update quiz score results",
+      message: commitMessage || "Update quiz score results",
       content: btoa(binaryContent),
       branch: GITHUB_BRANCH
     };
@@ -290,6 +290,40 @@ export default {
       } catch (error) {
         console.error("Could not download store.csv.", error);
         return jsonResponse({ error: error.message || "Could not download store.csv." }, 502, corsHeaders);
+      }
+    }
+
+    if (request.method === "POST" && url.searchParams.get("action") === "clear") {
+      if (!env.DELETE_PASSCODE) {
+        return jsonResponse({ error: "The delete passcode is not configured on the score API." }, 503, corsHeaders);
+      }
+      if (!env.SEAT_ATTEMPTS) {
+        return jsonResponse({ error: "The seat attempt store is not configured." }, 503, corsHeaders);
+      }
+      const remoteAddress = request.headers.get("CF-Connecting-IP") || "unknown";
+      let loginState;
+      try {
+        loginState = await callAttemptStore(
+          env,
+          "admin-login:" + remoteAddress,
+          "admin-login",
+          [],
+          null,
+          request.headers.get("X-Admin-Code") === env.DELETE_PASSCODE
+        );
+      } catch (error) {
+        console.error("Could not check admin login limits.", error);
+        return jsonResponse({ error: error.message || "Could not verify admin access." }, 502, corsHeaders);
+      }
+      if (!loginState.authorized) {
+        return jsonResponse({ error: loginState.error }, loginState.status, corsHeaders);
+      }
+      try {
+        await writeCsv(env.GITHUB_TOKEN, async function () { return []; }, "Clear quiz score results");
+        return jsonResponse({ cleared: true }, 200, corsHeaders);
+      } catch (error) {
+        console.error("Could not clear store.csv.", error);
+        return jsonResponse({ error: error.message || "Could not clear store.csv." }, 502, corsHeaders);
       }
     }
 
