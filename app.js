@@ -34,6 +34,8 @@
   const timer = document.getElementById("timer");
   const storageWarning = document.getElementById("storage-warning");
   const githubSaveStatus = document.getElementById("github-save-status");
+  const attemptCompletionMessage = document.getElementById("attempt-completion-message");
+  const nextAttemptButton = document.getElementById("next-attempt-button");
   const retryGithubSaveButton = document.getElementById("retry-github-save-button");
   const attemptIndicator = document.getElementById("attempt-indicator");
   const submitButton = document.getElementById("submit-button");
@@ -346,11 +348,24 @@
       githubSaveStatus.textContent = result.finalized
         ? "Your best score after 3 attempts was saved to GitHub (main/store.csv)."
         : "Attempt " + result.attemptCount + " of 3 saved. Your best score will be saved after your third attempt.";
+      attemptCompletionMessage.hidden = false;
+      if (result.finalized) {
+        nextAttemptButton.hidden = true;
+        attemptCompletionMessage.hidden = false;
+        attemptCompletionMessage.textContent = "You have completed all 3 Attempts";
+      } else {
+        nextAttemptButton.hidden = false;
+        attemptCompletionMessage.hidden = true;
+        attemptCompletionMessage.textContent = "";
+      }
     } catch (error) {
       console.error("Could not save the quiz score to GitHub.", error);
       githubSaveStatus.classList.add("is-error");
       if (error.status === 409) {
         githubSaveStatus.textContent = "This seat number has reached the 3-attempt limit; this score was not added to GitHub.";
+        nextAttemptButton.hidden = true;
+        attemptCompletionMessage.hidden = false;
+        attemptCompletionMessage.textContent = "You have completed all 3 Attempts";
       } else {
         githubSaveStatus.textContent = "GitHub save failed: " + error.message + " You can retry the save.";
         retryGithubSaveButton.hidden = false;
@@ -369,6 +384,9 @@
     promotionNote.textContent = "You have been promoted with passing Marks";
     document.getElementById("percentage-value").textContent = state.latestAttempt.percentage + "%";
     document.getElementById("result-reason").textContent = "Submission reason: " + reason + ". Seat number: " + state.candidate.seatNumber + ".";
+    attemptCompletionMessage.hidden = true;
+    attemptCompletionMessage.textContent = "";
+    nextAttemptButton.hidden = true;
     storageWarning.hidden = state.storageAvailable;
     renderRecords();
     renderReview();
@@ -460,8 +478,12 @@
       return;
     }
     formError.hidden = true;
-    startButton.disabled = true;
-    startButton.textContent = "Checking attempts...";
+    await startNextAttempt(seatNumber, name, startButton);
+  });
+
+  async function startNextAttempt(seatNumber, name, triggerButton) {
+    triggerButton.disabled = true;
+    triggerButton.textContent = "Checking attempts...";
     try {
       if (!SCORE_API_URL || SCORE_API_URL.indexOf("<") !== -1) {
         throw new Error("The score API URL has not been configured.");
@@ -478,8 +500,14 @@
         throw new Error("The score API returned an invalid attempt count.");
       }
       if (result.attemptCount >= MAX_ATTEMPTS) {
-        formError.textContent = "This seat number has used all 3 attempts. You cannot start another exam.";
-        formError.hidden = false;
+        if (triggerButton === startButton) {
+          formError.textContent = "You have completed all 3 Attempts";
+          formError.hidden = false;
+        } else {
+          nextAttemptButton.hidden = true;
+          attemptCompletionMessage.hidden = false;
+          attemptCompletionMessage.textContent = "You have completed all 3 Attempts";
+        }
         return;
       }
       state.attempts = loadAttempts();
@@ -490,13 +518,22 @@
       });
     } catch (error) {
       console.error("Could not check the seat number's exam attempt count.", error);
-      formError.textContent = "Could not verify your attempts. Please try again. " + error.message;
-      formError.hidden = false;
+      if (triggerButton === startButton) {
+        formError.textContent = "Could not verify your attempts. Please try again. " + error.message;
+        formError.hidden = false;
+      } else {
+        attemptCompletionMessage.hidden = false;
+        attemptCompletionMessage.textContent = "Could not verify your attempts. Please try again. " + error.message;
+      }
     } finally {
-      startButton.disabled = false;
-      startButton.innerHTML = 'Start exam <span aria-hidden="true">→</span>';
+      triggerButton.disabled = false;
+      if (triggerButton === startButton) {
+        startButton.innerHTML = 'Start exam <span aria-hidden="true">→</span>';
+      } else if (!nextAttemptButton.hidden) {
+        nextAttemptButton.textContent = "Take next attempt";
+      }
     }
-  });
+  }
 
   document.getElementById("previous-button").addEventListener("click", function () {
     if (state.currentIndex > 0) {
@@ -512,6 +549,11 @@
   });
   document.getElementById("submit-button").addEventListener("click", function () {
     submitExam("Submitted by candidate");
+  });
+  nextAttemptButton.addEventListener("click", function () {
+    if (state.candidate) {
+      startNextAttempt(state.candidate.seatNumber, state.candidate.name, nextAttemptButton);
+    }
   });
   tipButton.addEventListener("click", function () {
     const expanded = tipButton.getAttribute("aria-expanded") === "true";

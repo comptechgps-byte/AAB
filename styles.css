@@ -92,6 +92,7 @@ input:focus, textarea:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #
 .result-reason { color: var(--muted); font-size: 13px; }
 .github-save-status { color: var(--muted); font-size: 13px; }
 .github-save-status.is-error { color: var(--red); }
+.attempt-completion-message { color: var(--green); font-weight: 700; }
 .footer-link { margin-left: 10px; border: 0; padding: 0; background: transparent; color: var(--blue); cursor: pointer; font: inherit; text-decoration: underline; }
 .admin-status { display: block; margin-top: 8px; }
 .result-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 22px 0 34px; }
