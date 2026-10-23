@@ -574,7 +574,7 @@
       state.adminCsvUrl = URL.createObjectURL(csvBlob);
       adminDownloadLink.href = state.adminCsvUrl;
       adminDownloadLink.hidden = false;
-      adminStatus.textContent = "Admin access verified. Use the download link.";
+      adminStatus.textContent = "Passcode accepted. Select Download CSV now to download store.csv.";
     } catch (error) {
       console.error("Could not authorize the admin CSV download.", error);
       adminStatus.textContent = error.message;
