@@ -6,11 +6,11 @@ A browser-based Oracle SQL writing quiz. Students enter Oracle SQL statements in
 
 Open `index.html` in a modern browser. No package installation is required for the quiz. For GitHub score saving, deploy the site over HTTPS and configure the score API as described below.
 
-Enter a numbers-only seat number and name to start. Your attempt number is shown in the page header and increases for each saved attempt with the same seat number. Use Oracle SQL syntax for every answer. Each attempt randomly draws 5 questions from the 50-question bank, covering `CREATE TABLE`, `DROP TABLE`, `RENAME`, `ALTER TABLE`, `TRUNCATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, and `SELECT`. Each question earns up to 5 marks on the reported scale, for a total of 25. Scores below 10 are recorded as 10 with a promotion note. A live provisional match percentage and mark value are shown as you type. Partial marks are based on token-level edit similarity between the submitted query and the expected query; grading ignores SQL keyword case, formatting whitespace, and an optional final semicolon. The 10-minute timer submits automatically. Submitting manually, switching or hiding the tab, leaving focus on the browser window, exiting fullscreen, or significantly resizing the exam window ends the attempt immediately.
+Enter a numbers-only seat number and name to start. Each seat number is limited to three attempts across devices. Attempt scores are held in Cloudflare Durable Objects; only the best score is written to `store.csv`, after the third attempt. Use Oracle SQL syntax for every answer. Each attempt randomly draws 5 questions from the 50-question bank, covering `CREATE TABLE`, `DROP TABLE`, `RENAME`, `ALTER TABLE`, `TRUNCATE TABLE`, `INSERT`, `UPDATE`, `DELETE`, and `SELECT`. Each question earns up to 5 marks on the reported scale, for a total of 25. Scores below 10 are recorded as 10 with a promotion note. A live provisional match percentage and mark value are shown as you type. Partial marks are based on token-level edit similarity between the submitted query and the expected query; grading ignores SQL keyword case, formatting whitespace, and an optional final semicolon. The 10-minute timer submits automatically. Submitting manually, switching or hiding the tab, leaving focus on the browser window, exiting fullscreen, or significantly resizing the exam window ends the attempt immediately.
 
 ## Results and marks
 
-Attempt history and exports remain available in the current browser's local storage. In addition, each submission—including timer expiry—sends only the seat number and score to the score API, which commits them to `store.csv` on the repository's `main` branch. The GitHub CSV has the columns `Seat Number,Score`; if the file does not exist, the API creates it. Download the current result or export all browser-local attempts as a UTF-8 CSV with a byte-order mark for Excel.
+Attempt history remains available in the current browser's local storage and in private Cloudflare Durable Object storage. After the third attempt, the score API writes only the best score for that seat number to `store.csv` on the repository's `main` branch. The GitHub CSV has the columns `Seat Number,Score`; if the file does not exist, the API creates it. CSV download buttons are not shown in the results page.
 
 **The GitHub CSV is shared across devices.** Browser-local attempt history is still device-specific. If the score API is unavailable or not configured, the result page reports that the GitHub save failed and offers a retry button.
 
@@ -18,12 +18,15 @@ Attempt history and exports remain available in the current browser's local stor
 
 The static quiz must not contain a GitHub access token. The included Cloudflare Worker uses a server-side `GITHUB_TOKEN` secret to write `store.csv` to this repository (`comptechgps-byte/AAB`, branch `main`).
 
-1. Deploy `cloudflare/worker.mjs` with Wrangler (for example, `npx wrangler deploy --config cloudflare/wrangler.toml`).
+**Repository visibility:** this GitHub repository is public. The passcode gates the quiz's Admin download link, but it cannot prevent people from downloading `store.csv` directly from GitHub. Make the repository private or move the CSV to private storage if the scores must be access-restricted.
+
+1. Deploy `cloudflare/worker.mjs` with Wrangler (for example, `npx wrangler deploy --config cloudflare/wrangler.toml`). The Wrangler config creates the Durable Object namespace for private attempt history.
 2. Create a fine-grained GitHub personal access token restricted to this repository with **Contents: Read and write** permission, then set it as a Worker secret: `npx wrangler secret put GITHUB_TOKEN --config cloudflare/wrangler.toml`. Do not put the token in the website or commit it.
 3. Set the Worker variable `ALLOWED_ORIGIN` in `cloudflare/wrangler.toml` to the origin serving the quiz (the default is `https://comptechgps-byte.github.io`; do not include the project path).
-4. Put the deployed Worker URL in the `score-api-url` meta tag in `index.html`, then redeploy the site.
+4. Set the admin passcode as a Worker secret: `npx wrangler secret put ADMIN_PASSCODE --config cloudflare/wrangler.toml`. Enter the passcode at Wrangler's prompt; it is never stored in the website or repository.
+5. Put the deployed Worker URL in the `score-api-url` meta tag in `index.html`, then redeploy the site.
 
-The Worker checks the request origin and validates seat numbers and scores before updating the CSV through GitHub's Contents API. Since this endpoint accepts public exam submissions, configure Cloudflare rate limiting for the Worker to reduce automated abuse. A failed save is shown on the result screen and can be retried.
+The Worker checks the request origin and validates seat numbers and scores before updating the CSV through GitHub's Contents API. It preserves previous CSV scores as private attempt history when migrating existing records; incomplete seats are removed from `store.csv` until their third attempt, when only their best score is written. The Admin link at the bottom of the quiz asks for the passcode and then offers a download link for `store.csv`. Admin login is locked for 15 minutes after five incorrect passcodes from the same IP address. Redeploy the Worker and publish the updated quiz site whenever you change these files. Configure Cloudflare rate limiting for the Worker as additional protection against automated abuse.
 
 ## Monitoring limitation
 

@@ -4,6 +4,7 @@
   const STORAGE_KEY = "dbmsQuizAttemptsV1";
   const EXAM_SECONDS = 10 * 60;
   const QUESTIONS_PER_ATTEMPT = 5;
+  const MAX_ATTEMPTS = 3;
   const SCORE_API_URL = document.querySelector('meta[name="score-api-url"]').content.trim();
   const screens = {
     welcome: document.getElementById("welcome-screen"),
@@ -23,7 +24,8 @@
     attempts: [],
     storageAvailable: true,
     fullscreenEntered: false,
-    windowSize: null
+    windowSize: null,
+    adminCsvUrl: null
   };
 
   const form = document.getElementById("candidate-form");
@@ -38,6 +40,7 @@
   const tipButton = document.getElementById("tip-button");
   const syntaxTip = document.getElementById("syntax-tip");
   const monitoringWarning = document.getElementById("monitoring-warning");
+  const startButton = form.querySelector('button[type="submit"]');
   const matchPreview = document.createElement("p");
   matchPreview.className = "match-preview";
   matchPreview.setAttribute("role", "status");
@@ -293,7 +296,8 @@
       promoted: promoted,
       startedAt: state.startedAt,
       submittedAt: submittedAt,
-      submissionReason: reason
+      submissionReason: reason,
+      attemptId: window.crypto.randomUUID()
     };
     state.attempts.push(state.latestAttempt);
 
@@ -302,10 +306,10 @@
         window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state.attempts));
       } catch (error) {
         state.storageAvailable = false;
-        storageWarning.textContent = "This browser could not save attempts on this device (" + error.message + "). Download the CSV now to keep this result.";
+        storageWarning.textContent = "This browser could not save attempt history on this device (" + error.message + ").";
       }
     } else if (!storageWarning.textContent) {
-      storageWarning.textContent = "Saved attempts could not be read from this browser. Download the CSV now to keep this result.";
+      storageWarning.textContent = "Saved attempts could not be read from this browser.";
     }
     renderResult(reason);
     saveAttemptToGitHub(state.latestAttempt);
@@ -317,13 +321,14 @@
     retryGithubSaveButton.hidden = true;
     retryGithubSaveButton.disabled = true;
     try {
-      if (!SCORE_API_URL || SCORE_API_URL.indexOf("<") !== -1) {
-        throw new Error("The score API URL has not been configured.");
-      }
       const response = await window.fetch(SCORE_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ seatNumber: attempt.seatNumber, score: attempt.score })
+        body: JSON.stringify({
+          seatNumber: attempt.seatNumber,
+          score: attempt.score,
+          attemptId: attempt.attemptId
+        })
       });
       if (!response.ok) {
         let errorMessage = "HTTP " + response.status;
@@ -333,14 +338,23 @@
         } catch (error) {
           console.error("Could not read the score API error response.", error);
         }
-        throw new Error(errorMessage);
+        const requestError = new Error(errorMessage);
+        requestError.status = response.status;
+        throw requestError;
       }
-      githubSaveStatus.textContent = "Seat number and score saved to GitHub (main/store.csv).";
+      const result = await response.json();
+      githubSaveStatus.textContent = result.finalized
+        ? "Your best score after 3 attempts was saved to GitHub (main/store.csv)."
+        : "Attempt " + result.attemptCount + " of 3 saved. Your best score will be saved after your third attempt.";
     } catch (error) {
       console.error("Could not save the quiz score to GitHub.", error);
       githubSaveStatus.classList.add("is-error");
-      githubSaveStatus.textContent = "GitHub save failed: " + error.message + " You can retry the save.";
-      retryGithubSaveButton.hidden = false;
+      if (error.status === 409) {
+        githubSaveStatus.textContent = "This seat number has reached the 3-attempt limit; this score was not added to GitHub.";
+      } else {
+        githubSaveStatus.textContent = "GitHub save failed: " + error.message + " You can retry the save.";
+        retryGithubSaveButton.hidden = false;
+      }
     } finally {
       retryGithubSaveButton.disabled = false;
     }
@@ -352,7 +366,7 @@
     document.getElementById("score-value").textContent = state.latestAttempt.score + " / " + state.latestAttempt.maxMarks;
     const promotionNote = document.getElementById("promotion-note");
     promotionNote.hidden = !state.latestAttempt.promoted;
-    promotionNote.textContent = "You failed, but were promoted with passing marks.";
+    promotionNote.textContent = "You have been promoted with passing Marks";
     document.getElementById("percentage-value").textContent = state.latestAttempt.percentage + "%";
     document.getElementById("result-reason").textContent = "Submission reason: " + reason + ". Seat number: " + state.candidate.seatNumber + ".";
     storageWarning.hidden = state.storageAvailable;
@@ -430,37 +444,9 @@
     return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
   }
 
-  function csvEscape(value) {
-    let text = String(value === null || value === undefined ? "" : value);
-    if (/^\s*[=+\-@]/.test(text)) text = "'" + text;
-    return '"' + text.replace(/"/g, '""') + '"';
-  }
-
-  function downloadCsv(attempts, filename) {
-    const headers = ["Seat Number", "Attempt Number", "Name", "Score", "Maximum Marks", "Percentage", "Promoted", "Started At", "Submitted At", "Submission Reason"];
-    const rows = attempts.map(function (attempt) {
-      return [
-        attempt.seatNumber || attempt.enrollmentNumber, attempt.attemptNumber, attempt.name, attempt.score, attempt.maxMarks,
-        attempt.percentage + "%", attempt.promoted ? "Yes" : "No", attempt.startedAt, attempt.submittedAt,
-        attempt.submissionReason
-      ];
-    });
-    const csv = [headers].concat(rows).map(function (row) {
-      return row.map(csvEscape).join(",");
-    }).join("\r\n");
-    const blob = new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.setTimeout(function () { URL.revokeObjectURL(url); }, 1000);
-  }
-
-  form.addEventListener("submit", function (event) {
+  form.addEventListener("submit", async function (event) {
     event.preventDefault();
+    if (startButton.disabled) return;
     const seatNumber = document.getElementById("seat-number").value.trim();
     const name = document.getElementById("candidate-name").value.trim();
     if (!seatNumber || !name) {
@@ -474,13 +460,42 @@
       return;
     }
     formError.hidden = true;
-    state.attempts = loadAttempts();
-    const normalizedSeatNumber = seatNumber.trim().toUpperCase();
-    const attemptNumber = state.attempts.filter(function (attempt) {
-      const savedSeatNumber = String(attempt.seatNumber || attempt.enrollmentNumber || "").trim().toUpperCase();
-      return savedSeatNumber === normalizedSeatNumber;
-    }).length + 1;
-    startExam({ seatNumber: seatNumber, name: name, attemptNumber: attemptNumber });
+    startButton.disabled = true;
+    startButton.textContent = "Checking attempts...";
+    try {
+      if (!SCORE_API_URL || SCORE_API_URL.indexOf("<") !== -1) {
+        throw new Error("The score API URL has not been configured.");
+      }
+      const response = await window.fetch(SCORE_API_URL + "?seatNumber=" + encodeURIComponent(seatNumber));
+      let result;
+      try {
+        result = await response.json();
+      } catch (error) {
+        throw new Error("The score API returned an invalid response.");
+      }
+      if (!response.ok) throw new Error(result.error || "HTTP " + response.status);
+      if (!Number.isInteger(result.attemptCount) || result.attemptCount < 0) {
+        throw new Error("The score API returned an invalid attempt count.");
+      }
+      if (result.attemptCount >= MAX_ATTEMPTS) {
+        formError.textContent = "This seat number has used all 3 attempts. You cannot start another exam.";
+        formError.hidden = false;
+        return;
+      }
+      state.attempts = loadAttempts();
+      startExam({
+        seatNumber: seatNumber,
+        name: name,
+        attemptNumber: result.attemptCount + 1
+      });
+    } catch (error) {
+      console.error("Could not check the seat number's exam attempt count.", error);
+      formError.textContent = "Could not verify your attempts. Please try again. " + error.message;
+      formError.hidden = false;
+    } finally {
+      startButton.disabled = false;
+      startButton.innerHTML = 'Start exam <span aria-hidden="true">→</span>';
+    }
   });
 
   document.getElementById("previous-button").addEventListener("click", function () {
@@ -503,14 +518,42 @@
     tipButton.setAttribute("aria-expanded", String(!expanded));
     syntaxTip.hidden = expanded;
   });
-  document.getElementById("download-results-button").addEventListener("click", function () {
-    downloadCsv([state.latestAttempt], "dbms-quiz-result.csv");
-  });
-  document.getElementById("export-all-button").addEventListener("click", function () {
-    downloadCsv(state.attempts, "dbms-quiz-all-results.csv");
-  });
   retryGithubSaveButton.addEventListener("click", function () {
     if (state.latestAttempt) saveAttemptToGitHub(state.latestAttempt);
+  });
+  document.getElementById("admin-link").addEventListener("click", async function () {
+    const passcode = window.prompt("Enter the admin passcode:");
+    if (passcode === null) return;
+
+    const adminStatus = document.getElementById("admin-status");
+    const adminDownloadLink = document.getElementById("admin-download-link");
+    adminStatus.hidden = false;
+    adminStatus.textContent = "Verifying admin access...";
+    adminDownloadLink.hidden = true;
+    try {
+      const response = await window.fetch(SCORE_API_URL + "?action=download", {
+        headers: { "X-Admin-Code": passcode }
+      });
+      if (!response.ok) {
+        let errorMessage = "Admin access was denied.";
+        try {
+          const result = await response.json();
+          if (result.error) errorMessage = result.error;
+        } catch (error) {
+          console.error("Could not read the admin API error response.", error);
+        }
+        throw new Error(errorMessage);
+      }
+      const csvBlob = await response.blob();
+      if (state.adminCsvUrl) URL.revokeObjectURL(state.adminCsvUrl);
+      state.adminCsvUrl = URL.createObjectURL(csvBlob);
+      adminDownloadLink.href = state.adminCsvUrl;
+      adminDownloadLink.hidden = false;
+      adminStatus.textContent = "Admin access verified. Use the download link.";
+    } catch (error) {
+      console.error("Could not authorize the admin CSV download.", error);
+      adminStatus.textContent = error.message;
+    }
   });
 
   document.addEventListener("visibilitychange", function () {

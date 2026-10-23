@@ -4,3 +4,11 @@ compatibility_date = "2026-10-22"
 
 [vars]
 ALLOWED_ORIGIN = "https://comptechgps-byte.github.io"
+
+[[durable_objects.bindings]]
+name = "SEAT_ATTEMPTS"
+class_name = "SeatAttemptStore"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["SeatAttemptStore"]
